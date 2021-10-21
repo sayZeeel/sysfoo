@@ -26,41 +26,46 @@ pipeline {
         sh 'mvn clean test'
       }
     }
+    
+    stage('Packaging Stage') {
+        parallel {
+            stage('Package') {
+                when {
+                    branch 'master'
+                }
+            agent {
+                docker {
+                image 'maven:3.6.3-jdk-11-slim'
+                }
 
-    stage('Package') {
-        when {
-            branch 'master'
-        }
-      agent {
-        docker {
-          image 'maven:3.6.3-jdk-11-slim'
-        }
+            }
+            steps {
+                echo 'package maven app'
+                sh 'mvn package -DskipTests'
+                archiveArtifacts 'target/*.war'
+            }
+            }
 
-      }
-      steps {
-        echo 'package maven app'
-        sh 'mvn package -DskipTests'
-        archiveArtifacts 'target/*.war'
-      }
+            stage('Docker BnP') {
+                when {
+                    branch 'master'
+                }
+            agent any
+            steps {
+                script {
+                docker.withRegistry('https://index.docker.io/v1/', 'dockerlogin') {
+                    def dockerImage = docker.build("sayzeeel/sysfoo:v${env.BUILD_ID}", "./")
+                    dockerImage.push()
+                    dockerImage.push("latest")
+                    dockerImage.push("dev")
+                }
+                }
+
+            }
     }
-
-    stage('Docker BnP') {
-        when {
-            branch 'master'
         }
-      agent any
-      steps {
-        script {
-          docker.withRegistry('https://index.docker.io/v1/', 'dockerlogin') {
-            def dockerImage = docker.build("sayzeeel/sysfoo:v${env.BUILD_ID}", "./")
-            dockerImage.push()
-            dockerImage.push("latest")
-            dockerImage.push("dev")
-          }
-        }
-
-      }
     }
+    
 
   }
   tools {
